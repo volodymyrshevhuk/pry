@@ -35,7 +35,7 @@ class Pry
       # Retrieves a prompt.
       #
       # @example
-      #   Prompt[:my_prompt][:value]
+      #   Prompt[:my_prompt]
       #
       # @param [Symbol] prompt_name The name of the prompt you want to access
       # @return [Hash{Symbol=>Object}]

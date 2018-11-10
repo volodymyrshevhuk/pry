@@ -23,49 +23,6 @@ describe "test Pry defaults" do
       Object.new.pry input: InputTester.new("6")
       expect(@str_output.string).to match(/6/)
     end
-
-    it 'should pass in the prompt if readline arity is 1' do
-      Pry.prompt = proc { "A" }
-
-      arity_one_input = Class.new do
-        attr_accessor :prompt
-        def readline(prompt)
-          @prompt = prompt
-          "exit-all"
-        end
-      end.new
-
-      Pry.start(self, input: arity_one_input, output: StringIO.new)
-      expect(arity_one_input.prompt).to eq Pry.prompt.call
-    end
-
-    it 'should not pass in the prompt if the arity is 0' do
-      Pry.prompt = proc { "A" }
-
-      arity_zero_input = Class.new do
-        def readline
-          "exit-all"
-        end
-      end.new
-
-      expect { Pry.start(self, input: arity_zero_input, output: StringIO.new) }.to_not raise_error
-    end
-
-    it 'should not pass in the prompt if the arity is -1' do
-      Pry.prompt = proc { "A" }
-
-      arity_multi_input = Class.new do
-        attr_accessor :prompt
-
-        def readline(*args)
-          @prompt = args.first
-          "exit-all"
-        end
-      end.new
-
-      Pry.start(self, input: arity_multi_input, output: StringIO.new)
-      expect(arity_multi_input.prompt).to eq nil
-    end
   end
 
   it 'should set the output default, and the default should be overridable' do
@@ -132,6 +89,8 @@ describe "test Pry defaults" do
       Pry.config.output = StringIO.new
     end
 
+    after { Pry::Prompt.all.map(&:clear) }
+
     def get_prompts(pry)
       a = pry.select_prompt
       pry.eval "["
@@ -141,15 +100,16 @@ describe "test Pry defaults" do
     end
 
     it 'should set the prompt default, and the default should be overridable (single prompt)' do
-      Pry.prompt = proc { "test prompt> " }
-      new_prompt = proc { "A" }
+      Pry::Prompt.add(:test, 'description') { 'test prompt> ' }
+      Pry.prompt = Pry::Prompt[:test]
+      Pry::Prompt.add(:new_test, 'description') { 'A' }
 
       pry = Pry.new
       expect(pry.prompt).to eq Pry.prompt
-      expect(get_prompts(pry)).to eq ["test prompt> ", "test prompt> "]
+      expect(get_prompts(pry)).to eq ['test prompt> ', 'test prompt> ']
 
-      pry = Pry.new(prompt: new_prompt)
-      expect(pry.prompt).to eq new_prompt
+      pry = Pry.new(prompt: Pry::Prompt[:new_test])
+      expect(pry.prompt).to eq Pry::Prompt[:new_test]
       expect(get_prompts(pry)).to eq ["A", "A"]
 
       pry = Pry.new
@@ -158,15 +118,21 @@ describe "test Pry defaults" do
     end
 
     it 'should set the prompt default, and the default should be overridable (multi prompt)' do
-      Pry.prompt = [proc { "test prompt> " }, proc { "test prompt* " }]
-      new_prompt = [proc { "A" }, proc { "B" }]
+      Pry::Prompt.add(:test, 'description', %w[> *]) do |_, _, _, sep|
+        "test prompt#{sep} "
+      end
+      Pry.prompt = Pry::Prompt[:test]
+
+      Pry::Prompt.add(:new_test, 'description') do |_, _, _, sep|
+        sep == '>' ? 'A' : 'B'
+      end
 
       pry = Pry.new
       expect(pry.prompt).to eq Pry.prompt
       expect(get_prompts(pry)).to eq ["test prompt> ", "test prompt* "]
 
-      pry = Pry.new(prompt: new_prompt)
-      expect(pry.prompt).to eq new_prompt
+      pry = Pry.new(prompt: Pry::Prompt[:new_test])
+      expect(pry.prompt).to eq Pry::Prompt[:new_test]
       expect(get_prompts(pry)).to eq ["A", "B"]
 
       pry = Pry.new
@@ -184,6 +150,7 @@ describe "test Pry defaults" do
         @a , @b , @c = make[:a,0] , make[:b,1] , make[:c,2]
         @pry = Pry.new prompt: @a
       end
+
       it 'should have a prompt stack' do
         @pry.push_prompt @b
         @pry.push_prompt @c
@@ -194,8 +161,9 @@ describe "test Pry defaults" do
         expect(@pry.prompt).to eq @a
       end
 
-      it 'should restore overridden prompts when returning from file-mode' do
-        pry = Pry.new(prompt: [ proc { 'P>' } ] * 2)
+      it 'should restore overridden prompts when returning from shell-mode' do
+        Pry::Prompt.add(:test, 'description') { 'P>' }
+        pry = Pry.new(prompt: Pry::Prompt[:test])
         expect(pry.select_prompt).to eq "P>"
         pry.process_command('shell-mode')
         expect(pry.select_prompt).to match(/\Apry .* \$ \z/)

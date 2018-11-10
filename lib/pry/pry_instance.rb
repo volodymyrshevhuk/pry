@@ -548,24 +548,12 @@ class Pry
       })
 
     Pry.critical_section do
-      # If input buffer is empty then use normal prompt
-      if eval_string.empty?
-        generate_prompt(Array(prompt).first, c)
-      # Otherwise use the wait prompt (indicating multi-line expression)
-      else
-        generate_prompt(Array(prompt).last, c)
-      end
+      # If input buffer is empty then use normal prompt. Otherwise use the wait
+      # prompt (indicating multi-line expression).
+      prompt_proc = eval_string.empty? ? prompt[:value].first : prompt[:value].last
+      prompt_proc.call(c.object, c.nesting_level, c._pry_)
     end
   end
-
-  def generate_prompt(prompt_proc, conf)
-    if prompt_proc.arity == 1
-      prompt_proc.call(conf)
-    else
-      prompt_proc.call(conf.object, conf.nesting_level, conf._pry_)
-    end
-  end
-  private :generate_prompt
 
   # the array that the prompt stack is stored in
   def prompt_stack
